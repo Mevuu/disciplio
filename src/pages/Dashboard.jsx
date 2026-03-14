@@ -271,7 +271,7 @@ export default function Dashboard() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src="/icons/disciplio-logo-dark.svg" alt="Disciplio" className="h-8 w-auto" />
+            <img src="/icons/disciplio-logo-dark.svg" alt="Disciplio" className="h-8 w-auto max-w-[160px]" />
           </div>
           <a href="/settings" className="text-text-secondary hover:text-white transition-colors">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-5 h-5">

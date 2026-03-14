@@ -8,6 +8,12 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+html,
+body {
+  overflow-x: hidden;
+  width: 100%;
+}
+
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -19,6 +25,12 @@ body {
   background-color: #0d0d0d;
   color: #ffffff;
   overscroll-behavior: none;
+}
+
+#root {
+  overflow-x: hidden;
+  width: 100%;
+  min-height: 100vh;
 }
 
 input::placeholder {
