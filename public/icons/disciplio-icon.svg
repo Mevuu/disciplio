@@ -1,0 +1,20 @@
+<svg width="200" height="200" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="44" fill="#0D0D0D"/>
+
+  <!-- Bar 1 - completed -->
+  <rect x="40" y="58" width="120" height="20" rx="10" fill="#1A1A1A" stroke="#2A2A2A" stroke-width="1"/>
+  <circle cx="148" cy="68" r="13" fill="#00C853"/>
+  <path d="M143 68 L147 72 L154 62" fill="none" stroke="#0D0D0D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bar 2 - completed -->
+  <rect x="40" y="88" width="120" height="20" rx="10" fill="#1A1A1A" stroke="#2A2A2A" stroke-width="1"/>
+  <circle cx="148" cy="98" r="13" fill="#00C853"/>
+  <path d="M143 98 L147 102 L154 92" fill="none" stroke="#0D0D0D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bar 3 - incomplete -->
+  <rect x="40" y="118" width="120" height="20" rx="10" fill="#1A1A1A" stroke="#2A2A2A" stroke-width="1"/>
+  <circle cx="148" cy="128" r="13" fill="#1A1A1A" stroke="#2A2A2A" stroke-width="2"/>
+
+  <!-- Green underline -->
+  <rect x="40" y="146" width="120" height="4" rx="2" fill="#00C853"/>
+</svg>

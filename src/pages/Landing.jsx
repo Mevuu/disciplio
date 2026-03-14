@@ -9,7 +9,7 @@ const features = [
 export default function Landing() {
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-6 py-16">
-      <h1 className="text-3xl font-bold text-white tracking-tight">Disciplio</h1>
+      <img src="/icons/disciplio-logo-dark.svg" alt="Disciplio" className="h-8" />
 
       <div className="mt-16 text-center max-w-sm">
         <h2 className="text-2xl font-bold text-white leading-tight">
