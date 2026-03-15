@@ -64,6 +64,45 @@ export async function subscribeToPush(userId) {
   }
 }
 
+export async function repairMissingSubscription(userId) {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  if (!VAPID_PUBLIC_KEY) return;
+  if (Notification.permission !== 'granted') return;
+
+  const { data } = await supabase
+    .from('push_subscriptions')
+    .select('id')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (data) return;
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+    });
+
+    const { error } = await supabase.from('push_subscriptions').upsert(
+      {
+        user_id: userId,
+        subscription: subscription.toJSON(),
+        notifications_enabled: true,
+      },
+      { onConflict: 'user_id' }
+    );
+
+    if (error) {
+      console.error('Repair: failed to save subscription:', error);
+    } else {
+      console.log('Repair: re-registered push subscription for user', userId);
+    }
+  } catch (err) {
+    console.error('Repair: push re-subscribe failed:', err);
+  }
+}
+
 export async function toggleNotifications(userId, enabled) {
   const { error } = await supabase
     .from('push_subscriptions')

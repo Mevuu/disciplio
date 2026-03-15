@@ -4,6 +4,7 @@ import {
   shouldShowNotificationModal,
   subscribeToPush,
   snoozeModal,
+  repairMissingSubscription,
 } from '../lib/pushNotifications';
 
 export default function NotificationModal() {
@@ -12,10 +13,14 @@ export default function NotificationModal() {
   const [subscribing, setSubscribing] = useState(false);
 
   useEffect(() => {
-    if (user && shouldShowNotificationModal()) {
+    if (!user) return;
+
+    if (shouldShowNotificationModal()) {
       const timer = setTimeout(() => setVisible(true), 1500);
       return () => clearTimeout(timer);
     }
+
+    repairMissingSubscription(user.id);
   }, [user]);
 
   if (!visible) return null;
