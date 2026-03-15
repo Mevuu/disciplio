@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import HabitCard from '../components/HabitCard';
 import CalendarGrid from '../components/CalendarGrid';
 import BottomNav from '../components/BottomNav';
+import NotificationModal from '../components/NotificationModal';
+import NudgeButton from '../components/NudgeButton';
 import { MONTH_NAMES } from '../lib/constants';
 
 function todayStr() {
@@ -18,6 +20,8 @@ export default function Dashboard() {
   const [completedIds, setCompletedIds] = useState([]);
   const [completedDays, setCompletedDays] = useState([]);
   const [allDone, setAllDone] = useState(false);
+  const [partnership, setPartnership] = useState(null);
+  const [partnerDone, setPartnerDone] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const now = new Date();
@@ -83,11 +87,30 @@ export default function Dashboard() {
       setCompletedDays(days);
     }
 
-    // Validate streak on load: if the user missed days and has no freezes to
-    // cover the gap, reset the streak now so the counter is accurate.
+    // Validate streak on load
     if (profileData) {
       const validated = await validateStreakOnLoad(profileData, todayStr());
       if (validated !== profileData) setProfile(validated);
+    }
+
+    // Fetch active partnership
+    const { data: pData } = await supabase
+      .from('partnerships')
+      .select('*')
+      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+      .eq('status', 'active')
+      .maybeSingle();
+
+    if (pData) {
+      setPartnership(pData);
+      const partnerId = pData.user1_id === user.id ? pData.user2_id : pData.user1_id;
+      const { data: partnerCheckin } = await supabase
+        .from('checkins')
+        .select('fully_completed')
+        .eq('user_id', partnerId)
+        .eq('date', today)
+        .maybeSingle();
+      setPartnerDone(partnerCheckin?.fully_completed ?? false);
     }
 
     setLoading(false);
@@ -345,16 +368,38 @@ export default function Dashboard() {
         </div>
 
         {/* Partner */}
-        <div className="mt-10">
+        <div className="mt-10" id="partner-section">
           <p className="text-text-secondary text-xs font-semibold uppercase tracking-wider mb-4">
             Accountability Partner
           </p>
-          <div className="bg-surface border border-border rounded-2xl p-5 text-center">
-            <p className="text-text-secondary text-sm">No partner yet</p>
-            <button className="mt-4 w-full py-3 rounded-2xl border border-accent text-accent font-semibold text-sm transition-transform active:scale-[0.98]">
-              Invite a Partner
-            </button>
-          </div>
+          {partnership ? (
+            <div className="bg-surface border border-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-white text-sm font-semibold">
+                  {partnership.user1_id === user.id ? 'Your Partner' : 'Your Partner'}
+                </span>
+                <span className={`text-xs font-medium px-2 py-1 rounded-full ${partnerDone ? 'bg-accent/20 text-accent' : 'bg-border text-text-secondary'}`}>
+                  {partnerDone ? 'All done ✅' : 'Not yet'}
+                </span>
+              </div>
+              {allDone && !partnerDone && (
+                <NudgeButton
+                  partnershipId={partnership.id}
+                  lastNudgeSent={partnership.last_nudge_sent}
+                />
+              )}
+              {allDone && partnerDone && (
+                <p className="text-accent text-sm text-center">Both crushing it today 💪</p>
+              )}
+            </div>
+          ) : (
+            <div className="bg-surface border border-border rounded-2xl p-5 text-center">
+              <p className="text-text-secondary text-sm">No partner yet</p>
+              <button className="mt-4 w-full py-3 rounded-2xl border border-accent text-accent font-semibold text-sm transition-transform active:scale-[0.98]">
+                Invite a Partner
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Unlock Progress */}
@@ -378,6 +423,7 @@ export default function Dashboard() {
       </div>
 
       <BottomNav />
+      <NotificationModal />
     </div>
   );
 }

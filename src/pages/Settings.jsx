@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ALL_HABITS, HABIT_EMOJIS } from '../lib/constants';
+import { getNotificationStatus, toggleNotifications } from '../lib/pushNotifications';
 import BottomNav from '../components/BottomNav';
 
 export default function Settings() {
@@ -17,6 +18,8 @@ export default function Settings() {
   const [customHabitInput, setCustomHabitInput] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('');
   const [saving, setSaving] = useState(false);
+  const [notifEnabled, setNotifEnabled] = useState(null);
+  const [togglingNotif, setTogglingNotif] = useState(false);
 
   const allHabits = [...ALL_HABITS, ...customHabits];
 
@@ -29,6 +32,8 @@ export default function Settings() {
       ]);
       if (p.data) setProfile(p.data);
       if (h.data) setHabits(h.data);
+      const notifStatus = await getNotificationStatus(user.id);
+      setNotifEnabled(notifStatus);
       setLoading(false);
     }
     load();
@@ -252,6 +257,42 @@ export default function Settings() {
             </div>
           </div>
         </div>
+
+        {/* Notifications */}
+        {notifEnabled !== null && (
+          <div className="mt-8">
+            <p className="text-text-secondary text-xs font-semibold uppercase tracking-wider mb-4">
+              Notifications
+            </p>
+            <div className="bg-surface border border-border rounded-2xl p-5 flex items-center justify-between">
+              <div>
+                <p className="text-white text-sm font-semibold">Push Notifications</p>
+                <p className="text-text-secondary text-xs mt-1">
+                  Daily reminders &amp; partner nudges
+                </p>
+              </div>
+              <button
+                disabled={togglingNotif}
+                onClick={async () => {
+                  setTogglingNotif(true);
+                  const newVal = !notifEnabled;
+                  const ok = await toggleNotifications(user.id, newVal);
+                  if (ok) setNotifEnabled(newVal);
+                  setTogglingNotif(false);
+                }}
+                className={`relative w-12 h-7 rounded-full transition-colors duration-200 ${
+                  notifEnabled ? 'bg-accent' : 'bg-border'
+                }`}
+              >
+                <span
+                  className={`absolute top-0.5 left-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
+                    notifEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Account */}
         <div className="mt-8">
