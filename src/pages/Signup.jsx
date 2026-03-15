@@ -11,8 +11,12 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [selectedHabits, setSelectedHabits] = useState([]);
+  const [customHabits, setCustomHabits] = useState([]);
+  const [customHabitInput, setCustomHabitInput] = useState('');
   const { signUp } = useAuth();
   const navigate = useNavigate();
+
+  const allHabits = [...ALL_HABITS, ...customHabits];
 
   const handleCreateAccount = async (e) => {
     e.preventDefault();
@@ -36,6 +40,17 @@ export default function Signup() {
     });
   };
 
+  const addCustomHabit = () => {
+    const trimmed = customHabitInput.trim();
+    if (!trimmed || customHabits.length >= 3) return;
+    const duplicate = allHabits.some(
+      (h) => h.text.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) return;
+    setCustomHabits((prev) => [...prev, { emoji: '✏️', text: trimmed }]);
+    setCustomHabitInput('');
+  };
+
   const handleConfirmHabits = async () => {
     setLoading(true);
     setError('');
@@ -54,8 +69,8 @@ export default function Signup() {
 
         const habitRows = selectedHabits.map((idx) => ({
           user_id: user.id,
-          habit_emoji: ALL_HABITS[idx].emoji,
-          habit_text: ALL_HABITS[idx].text,
+          habit_emoji: allHabits[idx].emoji,
+          habit_text: allHabits[idx].text,
         }));
 
         await supabase.from('habits').insert(habitRows);
@@ -91,7 +106,7 @@ export default function Signup() {
           )}
 
           <div className="mt-6 flex flex-col gap-3">
-            {ALL_HABITS.map((habit, idx) => {
+            {allHabits.map((habit, idx) => {
               const isSelected = selectedHabits.includes(idx);
               return (
                 <button
@@ -116,6 +131,27 @@ export default function Signup() {
               );
             })}
           </div>
+
+          {customHabits.length < 3 && (
+            <div className="mt-4 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Add your own habit"
+                value={customHabitInput}
+                onChange={(e) => setCustomHabitInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addCustomHabit()}
+                maxLength={60}
+                className="flex-1 bg-surface border border-border rounded-2xl px-4 py-3 text-white text-sm placeholder-text-secondary focus:outline-none focus:border-accent transition-colors"
+              />
+              <button
+                onClick={addCustomHabit}
+                disabled={!customHabitInput.trim()}
+                className="w-12 h-12 flex items-center justify-center rounded-2xl bg-accent text-white text-2xl font-bold flex-shrink-0 transition-opacity disabled:opacity-30"
+              >
+                +
+              </button>
+            </div>
+          )}
 
           <button
             onClick={handleConfirmHabits}
