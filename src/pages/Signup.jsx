@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { ALL_HABITS } from '../lib/constants';
+import { ALL_HABITS, HABIT_EMOJIS } from '../lib/constants';
 
 export default function Signup() {
   const [step, setStep] = useState(1);
@@ -13,6 +13,7 @@ export default function Signup() {
   const [selectedHabits, setSelectedHabits] = useState([]);
   const [customHabits, setCustomHabits] = useState([]);
   const [customHabitInput, setCustomHabitInput] = useState('');
+  const [selectedEmoji, setSelectedEmoji] = useState('');
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
@@ -47,8 +48,9 @@ export default function Signup() {
       (h) => h.text.toLowerCase() === trimmed.toLowerCase()
     );
     if (duplicate) return;
-    setCustomHabits((prev) => [...prev, { emoji: '✏️', text: trimmed }]);
+    setCustomHabits((prev) => [...prev, { emoji: selectedEmoji || '⭐', text: trimmed }]);
     setCustomHabitInput('');
+    setSelectedEmoji('');
   };
 
   const handleConfirmHabits = async () => {
@@ -133,23 +135,47 @@ export default function Signup() {
           </div>
 
           {customHabits.length < 3 && (
-            <div className="mt-4 flex items-center gap-2">
-              <input
-                type="text"
-                placeholder="Add your own habit"
-                value={customHabitInput}
-                onChange={(e) => setCustomHabitInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addCustomHabit()}
-                maxLength={60}
-                className="flex-1 bg-surface border border-border rounded-2xl px-4 py-3 text-white text-sm placeholder-text-secondary focus:outline-none focus:border-accent transition-colors"
-              />
-              <button
-                onClick={addCustomHabit}
-                disabled={!customHabitInput.trim()}
-                className="w-12 h-12 flex items-center justify-center rounded-2xl bg-accent text-white text-2xl font-bold flex-shrink-0 transition-opacity disabled:opacity-30"
-              >
-                +
-              </button>
+            <div className="mt-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Add your own habit"
+                  value={customHabitInput}
+                  onChange={(e) => setCustomHabitInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addCustomHabit()}
+                  maxLength={60}
+                  className="flex-1 bg-surface border border-border rounded-2xl px-4 py-3 text-white text-sm placeholder-text-secondary focus:outline-none focus:border-accent transition-colors"
+                />
+                <button
+                  onClick={addCustomHabit}
+                  disabled={!customHabitInput.trim()}
+                  className="w-12 h-12 flex items-center justify-center rounded-2xl bg-accent text-white text-2xl font-bold flex-shrink-0 transition-opacity disabled:opacity-30"
+                >
+                  +
+                </button>
+              </div>
+              {customHabitInput.trim() && (
+                <div className="mt-3 bg-surface border border-border rounded-2xl p-3">
+                  <p className="text-text-secondary text-xs font-medium mb-2">
+                    Pick an emoji {selectedEmoji && <span className="text-white">— {selectedEmoji}</span>}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {HABIT_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => setSelectedEmoji(emoji === selectedEmoji ? '' : emoji)}
+                        className={`w-10 h-10 flex items-center justify-center rounded-xl text-xl transition-all ${
+                          selectedEmoji === emoji
+                            ? 'bg-accent/20 ring-2 ring-accent scale-110'
+                            : 'bg-bg hover:bg-border'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
