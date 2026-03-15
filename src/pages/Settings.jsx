@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ALL_HABITS, HABIT_EMOJIS } from '../lib/constants';
-import { getNotificationStatus, toggleNotifications } from '../lib/pushNotifications';
+import { getNotificationStatus, toggleNotifications, resetNotificationPreference } from '../lib/pushNotifications';
 import BottomNav from '../components/BottomNav';
 
 export default function Settings() {
@@ -315,6 +315,22 @@ export default function Settings() {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* Debug / Testing */}
+        <div className="mt-8">
+          <p className="text-text-secondary text-xs font-semibold uppercase tracking-wider mb-4">
+            Testing
+          </p>
+          <button
+            onClick={() => {
+              resetNotificationPreference();
+              alert('Notification preference reset. The permission modal will appear on next app load.');
+            }}
+            className="w-full py-3 rounded-2xl border border-border text-text-secondary font-semibold text-sm transition-transform active:scale-[0.98]"
+          >
+            Reset Notification Permission
+          </button>
         </div>
 
         {/* Logout */}

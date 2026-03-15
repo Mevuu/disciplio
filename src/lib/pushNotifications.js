@@ -37,6 +37,11 @@ export function snoozeModal() {
   localStorage.setItem(MODAL_SNOOZE_KEY, String(Date.now() + sevenDays));
 }
 
+export function resetNotificationPreference() {
+  localStorage.removeItem(MODAL_DISMISSED_KEY);
+  localStorage.removeItem(MODAL_SNOOZE_KEY);
+}
+
 export async function subscribeToPush(userId) {
   try {
     const registration = await navigator.serviceWorker.ready;
