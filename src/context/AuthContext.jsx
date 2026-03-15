@@ -8,10 +8,31 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+    async function initAuth() {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session) {
+        // Validate the cached token against the server — catches deleted
+        // users, revoked tokens, and expired sessions that localStorage
+        // still considers valid.
+        const { data: { user: verified }, error } = await supabase.auth.getUser();
+
+        if (error || !verified) {
+          await supabase.auth.signOut();
+          setUser(null);
+          setLoading(false);
+          return;
+        }
+
+        setUser(verified);
+      } else {
+        setUser(null);
+      }
+
       setLoading(false);
-    });
+    }
+
+    initAuth();
 
     const {
       data: { subscription },
