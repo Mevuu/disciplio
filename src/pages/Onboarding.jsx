@@ -2,14 +2,19 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { ALL_HABITS } from '../lib/constants';
+import { ALL_HABITS, HABIT_EMOJIS } from '../lib/constants';
 
 export default function Onboarding() {
   const [selectedHabits, setSelectedHabits] = useState([]);
+  const [customHabits, setCustomHabits] = useState([]);
+  const [customHabitInput, setCustomHabitInput] = useState('');
+  const [selectedEmoji, setSelectedEmoji] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const navigate = useNavigate();
+
+  const allHabits = [...ALL_HABITS, ...customHabits];
 
   const toggleHabit = (index) => {
     setSelectedHabits((prev) => {
@@ -17,6 +22,18 @@ export default function Onboarding() {
       if (prev.length >= 3) return prev;
       return [...prev, index];
     });
+  };
+
+  const addCustomHabit = () => {
+    const trimmed = customHabitInput.trim();
+    if (!trimmed || customHabits.length >= 3) return;
+    const duplicate = allHabits.some(
+      (h) => h.text.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (duplicate) return;
+    setCustomHabits((prev) => [...prev, { emoji: selectedEmoji || '⭐', text: trimmed }]);
+    setCustomHabitInput('');
+    setSelectedEmoji('');
   };
 
   const handleConfirmHabits = async () => {
@@ -34,8 +51,8 @@ export default function Onboarding() {
 
       const habitRows = selectedHabits.map((idx) => ({
         user_id: user.id,
-        habit_emoji: ALL_HABITS[idx].emoji,
-        habit_text: ALL_HABITS[idx].text,
+        habit_emoji: allHabits[idx].emoji,
+        habit_text: allHabits[idx].text,
       }));
 
       await supabase.from('habits').insert(habitRows);
@@ -69,7 +86,7 @@ export default function Onboarding() {
         )}
 
         <div className="mt-6 flex flex-col gap-3">
-          {ALL_HABITS.map((habit, idx) => {
+          {allHabits.map((habit, idx) => {
             const isSelected = selectedHabits.includes(idx);
             return (
               <button
@@ -94,6 +111,51 @@ export default function Onboarding() {
             );
           })}
         </div>
+
+        {customHabits.length < 3 && (
+          <div className="mt-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Add your own habit"
+                value={customHabitInput}
+                onChange={(e) => setCustomHabitInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addCustomHabit()}
+                maxLength={60}
+                className="flex-1 bg-surface border border-border rounded-2xl px-4 py-3 text-white text-sm placeholder-text-secondary focus:outline-none focus:border-accent transition-colors"
+              />
+              <button
+                onClick={addCustomHabit}
+                disabled={!customHabitInput.trim()}
+                className="w-12 h-12 flex items-center justify-center rounded-2xl bg-accent text-white text-2xl font-bold flex-shrink-0 transition-opacity disabled:opacity-30"
+              >
+                +
+              </button>
+            </div>
+            {customHabitInput.trim() && (
+              <div className="mt-3 bg-surface border border-border rounded-2xl p-3">
+                <p className="text-text-secondary text-xs font-medium mb-2">
+                  Pick an emoji {selectedEmoji && <span className="text-white">— {selectedEmoji}</span>}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {HABIT_EMOJIS.map((emoji) => (
+                    <button
+                      key={emoji}
+                      onClick={() => setSelectedEmoji(emoji === selectedEmoji ? '' : emoji)}
+                      className={`w-10 h-10 flex items-center justify-center rounded-xl text-xl transition-all ${
+                        selectedEmoji === emoji
+                          ? 'bg-accent/20 ring-2 ring-accent scale-110'
+                          : 'bg-bg hover:bg-border'
+                      }`}
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         <button
           onClick={handleConfirmHabits}
