@@ -44,8 +44,12 @@ export default function NudgeButton({ partnershipId, lastNudgeSent }) {
   const handleNudge = async () => {
     setSending(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error('No active session');
+
       const { error } = await supabase.functions.invoke('send-nudge', {
         body: { partnership_id: partnershipId },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw error;
       setCooldownEnd(Date.now() + COOLDOWN_MS);
