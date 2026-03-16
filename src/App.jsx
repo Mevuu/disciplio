@@ -9,6 +9,7 @@ import Onboarding from './pages/Onboarding';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Friends from './pages/Friends';
+import InviteLanding from './pages/InviteLanding';
 
 export default function App() {
   return (
@@ -18,6 +19,7 @@ export default function App() {
           <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+          <Route path="/invite/:code" element={<InviteLanding />} />
           <Route
             path="/onboarding"
             element={

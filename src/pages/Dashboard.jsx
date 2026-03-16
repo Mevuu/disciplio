@@ -5,8 +5,16 @@ import HabitCard from '../components/HabitCard';
 import CalendarGrid from '../components/CalendarGrid';
 import BottomNav from '../components/BottomNav';
 import NotificationModal from '../components/NotificationModal';
-import NudgeButton from '../components/NudgeButton';
+import PartnerCard from '../components/PartnerCard';
+import PendingInviteBanner from '../components/PendingInviteBanner';
+import InvitePartnerModal from '../components/InvitePartnerModal';
 import { MONTH_NAMES } from '../lib/constants';
+import {
+  getStoredInviteCode,
+  clearStoredInviteCode,
+  acceptInviteCode,
+  maybeIncrementPartnerStreak,
+} from '../lib/partners';
 
 function todayStr() {
   const d = new Date();
@@ -21,12 +29,23 @@ export default function Dashboard() {
   const [completedDays, setCompletedDays] = useState([]);
   const [allDone, setAllDone] = useState(false);
   const [partnership, setPartnership] = useState(null);
-  const [partnerDone, setPartnerDone] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showInviteModal, setShowInviteModal] = useState(false);
 
   const now = new Date();
   const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
   const dateStr = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+
+  const fetchPartnership = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('partnerships')
+      .select('*')
+      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+      .eq('status', 'active')
+      .maybeSingle();
+    setPartnership(data);
+  }, [user]);
 
   const fetchData = useCallback(async () => {
     if (!user) return;
@@ -46,15 +65,9 @@ export default function Dashboard() {
         .gte('date', monthStart),
     ]);
 
-    console.log('[fetchData] profileRes:', profileRes.data, profileRes.error);
-    console.log('[fetchData] habitsRes:', habitsRes.data, habitsRes.error);
-    console.log('[fetchData] checkinRes:', checkinRes.data, checkinRes.error);
-
-    // If profile row is missing (signup upsert may have failed), create it now
     let profileData = profileRes.data;
     if (!profileData && !profileRes.error) {
-      console.warn('[fetchData] No profile row found — creating one now');
-      const { data: created, error: createErr } = await supabase
+      const { data: created } = await supabase
         .from('profiles')
         .upsert({
           id: user.id,
@@ -66,55 +79,35 @@ export default function Dashboard() {
         })
         .select()
         .single();
-      console.log('[fetchData] Profile create result:', created, createErr);
       profileData = created;
     }
 
     if (profileData) setProfile(profileData);
-
-    if (habitsRes.data && habitsRes.data.length > 0) {
-      setHabits(habitsRes.data);
-    } else if (!habitsRes.error) {
-      console.warn('[fetchData] No habits found for user:', user.id);
-    }
-
-    if (checkinRes.data?.habits_completed) {
-      setCompletedIds(checkinRes.data.habits_completed);
-    }
+    if (habitsRes.data?.length > 0) setHabits(habitsRes.data);
+    if (checkinRes.data?.habits_completed) setCompletedIds(checkinRes.data.habits_completed);
 
     if (monthCheckinsRes.data) {
       const days = monthCheckinsRes.data.map((c) => new Date(c.date + 'T00:00:00').getDate());
       setCompletedDays(days);
     }
 
-    // Validate streak on load
     if (profileData) {
       const validated = await validateStreakOnLoad(profileData, todayStr());
       if (validated !== profileData) setProfile(validated);
     }
 
-    // Fetch active partnership
-    const { data: pData } = await supabase
-      .from('partnerships')
-      .select('*')
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-      .eq('status', 'active')
-      .maybeSingle();
+    await fetchPartnership();
 
-    if (pData) {
-      setPartnership(pData);
-      const partnerId = pData.user1_id === user.id ? pData.user2_id : pData.user1_id;
-      const { data: partnerCheckin } = await supabase
-        .from('checkins')
-        .select('fully_completed')
-        .eq('user_id', partnerId)
-        .eq('date', today)
-        .maybeSingle();
-      setPartnerDone(partnerCheckin?.fully_completed ?? false);
+    // Process pending invite code from localStorage (from invite link flow)
+    const inviteCode = getStoredInviteCode();
+    if (inviteCode) {
+      await acceptInviteCode(inviteCode);
+      clearStoredInviteCode();
+      await fetchPartnership();
     }
 
     setLoading(false);
-  }, [user]);
+  }, [user, fetchPartnership]);
 
   useEffect(() => {
     fetchData();
@@ -138,10 +131,7 @@ export default function Dashboard() {
     const fullyCompleted = newCompleted.length === habits.length;
     const today = todayStr();
 
-    console.log('[toggleHabit] habitId:', habitId);
-    console.log('[toggleHabit] newCompleted:', newCompleted, '| habits.length:', habits.length, '| fullyCompleted:', fullyCompleted);
-
-    const checkinResult = await supabase.from('checkins').upsert(
+    await supabase.from('checkins').upsert(
       {
         user_id: user.id,
         date: today,
@@ -151,38 +141,35 @@ export default function Dashboard() {
       { onConflict: 'user_id,date' }
     );
 
-    console.log('[toggleHabit] checkin upsert result:', checkinResult.error ? 'ERROR: ' + checkinResult.error.message : 'OK');
-
     if (fullyCompleted) {
       if (!completedDays.includes(now.getDate())) {
         setCompletedDays((prev) => [...prev, now.getDate()]);
       }
 
-      console.log('[toggleHabit] All habits done! Current profile:', profile);
-      console.log('[toggleHabit] profile.last_checkin_date:', profile?.last_checkin_date, '| today:', today);
-
       const alreadyCounted = profile?.last_checkin_date === today;
-      console.log('[toggleHabit] Already counted today?', alreadyCounted);
-
       if (!alreadyCounted) {
         const updatedProfile = await computeAndSaveStreak(today);
-        if (updatedProfile) {
-          console.log('[toggleHabit] Setting profile with new streak:', updatedProfile.streak_count);
-          setProfile(updatedProfile);
+        if (updatedProfile) setProfile(updatedProfile);
+      }
+
+      // Check partner streak
+      if (partnership) {
+        const newStreak = await maybeIncrementPartnerStreak(partnership.id, today);
+        if (newStreak !== null && newStreak !== partnership.partner_streak) {
+          setPartnership((prev) => prev ? { ...prev, partner_streak: newStreak } : prev);
         }
       }
     }
   };
 
   async function computeAndSaveStreak(today) {
-    // Re-read the profile directly from DB to avoid stale closure issues
     const { data: freshProfile, error: fetchErr } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
       .maybeSingle();
 
-    console.log('[computeStreak] Fresh profile from DB:', freshProfile, '| fetchErr:', fetchErr);
+    if (fetchErr) return null;
 
     const lastDate = freshProfile?.last_checkin_date ?? null;
     const currentStreak = freshProfile?.streak_count ?? 0;
@@ -192,28 +179,20 @@ export default function Dashboard() {
 
     if (!lastDate) {
       newStreak = 1;
-      console.log('[computeStreak] No last_checkin_date → first completion, streak = 1');
     } else {
       const last = new Date(lastDate + 'T00:00:00');
       const todayDate = new Date(today + 'T00:00:00');
       const diffDays = Math.round((todayDate - last) / (1000 * 60 * 60 * 24));
-      console.log('[computeStreak] lastDate:', lastDate, '| diffDays:', diffDays);
 
-      if (diffDays <= 0) {
-        console.log('[computeStreak] diffDays <= 0, already counted today');
-        return freshProfile;
-      } else if (diffDays === 1) {
-        newStreak = currentStreak + 1;
-        console.log('[computeStreak] Consecutive day, streak:', currentStreak, '→', newStreak);
-      } else {
+      if (diffDays <= 0) return freshProfile;
+      else if (diffDays === 1) newStreak = currentStreak + 1;
+      else {
         const missedDays = diffDays - 1;
         if (missedDays <= currentFreezes) {
           freezesUsed = missedDays;
           newStreak = currentStreak + 1;
-          console.log('[computeStreak] Using', freezesUsed, 'freezes, streak:', currentStreak, '→', newStreak);
         } else {
           newStreak = 1;
-          console.log('[computeStreak] Streak broken (missed', missedDays, 'days, only', currentFreezes, 'freezes), reset to 1');
         }
       }
     }
@@ -228,19 +207,13 @@ export default function Dashboard() {
       habit_slots_unlocked: freshProfile?.habit_slots_unlocked ?? 3,
     };
 
-    console.log('[computeStreak] Upserting profile:', profileData);
-
     const { data: savedProfile, error: saveErr } = await supabase
       .from('profiles')
       .upsert(profileData)
       .select()
       .single();
 
-    console.log('[computeStreak] Upsert result — data:', savedProfile, '| error:', saveErr);
-
     if (saveErr) {
-      console.error('[computeStreak] PROFILE UPSERT FAILED:', saveErr.message);
-      // Even if DB fails, return a local object so the UI updates immediately
       return { ...freshProfile, streak_count: newStreak, last_checkin_date: today };
     }
 
@@ -259,23 +232,26 @@ export default function Dashboard() {
 
     const missedDays = diffDays - 1;
     const availableFreezes = currentProfile?.streak_freeze_count ?? 0;
-
     if (missedDays <= availableFreezes) return currentProfile;
 
-    // Streak is broken — reset via upsert to handle missing rows
     const { data: saved, error } = await supabase
       .from('profiles')
       .upsert({ id: user.id, email: user.email, streak_count: 0 })
       .select()
       .single();
 
-    if (error) {
-      console.error('[validateStreak] Reset error:', error);
-      return currentProfile;
-    }
-
+    if (error) return currentProfile;
     return saved ?? { ...currentProfile, streak_count: 0 };
   }
+
+  const handlePartnerStreakUpdate = useCallback(async () => {
+    if (!partnership) return;
+    const today = todayStr();
+    const newStreak = await maybeIncrementPartnerStreak(partnership.id, today);
+    if (newStreak !== null && newStreak !== partnership.partner_streak) {
+      setPartnership((prev) => prev ? { ...prev, partner_streak: newStreak } : prev);
+    }
+  }, [partnership]);
 
   if (loading) {
     return (
@@ -309,8 +285,13 @@ export default function Dashboard() {
           {dayOfWeek}, {dateStr}
         </p>
 
+        {/* Pending partner invite banner */}
+        <div className="mt-6">
+          <PendingInviteBanner userId={user.id} onAccepted={fetchPartnership} />
+        </div>
+
         {/* Streak */}
-        <div className="mt-8 text-center">
+        <div className="mt-4 text-center">
           <p className="text-6xl font-extrabold text-white">
             🔥 {streak}
           </p>
@@ -373,29 +354,18 @@ export default function Dashboard() {
             Accountability Partner
           </p>
           {partnership ? (
-            <div className="bg-surface border border-border rounded-2xl p-5">
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-white text-sm font-semibold">
-                  {partnership.user1_id === user.id ? 'Your Partner' : 'Your Partner'}
-                </span>
-                <span className={`text-xs font-medium px-2 py-1 rounded-full ${partnerDone ? 'bg-accent/20 text-accent' : 'bg-border text-text-secondary'}`}>
-                  {partnerDone ? 'All done ✅' : 'Not yet'}
-                </span>
-              </div>
-              {allDone && !partnerDone && (
-                <NudgeButton
-                  partnershipId={partnership.id}
-                  lastNudgeSent={partnership.last_nudge_sent}
-                />
-              )}
-              {allDone && partnerDone && (
-                <p className="text-accent text-sm text-center">Both crushing it today 💪</p>
-              )}
-            </div>
+            <PartnerCard
+              userId={user.id}
+              partnership={partnership}
+              onStreakUpdate={handlePartnerStreakUpdate}
+            />
           ) : (
             <div className="bg-surface border border-border rounded-2xl p-5 text-center">
               <p className="text-text-secondary text-sm">No partner yet</p>
-              <button className="mt-4 w-full py-3 rounded-2xl border border-accent text-accent font-semibold text-sm transition-transform active:scale-[0.98]">
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="mt-4 w-full py-3 rounded-2xl border border-accent text-accent font-semibold text-sm transition-transform active:scale-[0.98]"
+              >
                 Invite a Partner
               </button>
             </div>
@@ -424,6 +394,14 @@ export default function Dashboard() {
 
       <BottomNav />
       <NotificationModal />
+
+      {showInviteModal && (
+        <InvitePartnerModal
+          userId={user.id}
+          onClose={() => setShowInviteModal(false)}
+          onInviteSent={() => fetchPartnership()}
+        />
+      )}
     </div>
   );
 }

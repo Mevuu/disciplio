@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ALL_HABITS, HABIT_EMOJIS } from '../lib/constants';
 import { getNotificationStatus, toggleNotifications, resetNotificationPreference } from '../lib/pushNotifications';
+import RemovePartnerModal from '../components/RemovePartnerModal';
 import BottomNav from '../components/BottomNav';
 
 export default function Settings() {
@@ -20,6 +21,9 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [notifEnabled, setNotifEnabled] = useState(null);
   const [togglingNotif, setTogglingNotif] = useState(false);
+  const [partnership, setPartnership] = useState(null);
+  const [partnerProfile, setPartnerProfile] = useState(null);
+  const [showRemoveModal, setShowRemoveModal] = useState(false);
 
   const allHabits = [...ALL_HABITS, ...customHabits];
 
@@ -34,6 +38,25 @@ export default function Settings() {
       if (h.data) setHabits(h.data);
       const notifStatus = await getNotificationStatus(user.id);
       setNotifEnabled(notifStatus);
+
+      const { data: pData } = await supabase
+        .from('partnerships')
+        .select('*')
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (pData) {
+        setPartnership(pData);
+        const partnerId = pData.user1_id === user.id ? pData.user2_id : pData.user1_id;
+        const { data: pp } = await supabase
+          .from('profiles')
+          .select('id, email, username')
+          .eq('id', partnerId)
+          .maybeSingle();
+        if (pp) setPartnerProfile(pp);
+      }
+
       setLoading(false);
     }
     load();
@@ -240,6 +263,36 @@ export default function Settings() {
           </button>
         </div>
 
+        {/* Accountability Partner */}
+        <div className="mt-8">
+          <p className="text-text-secondary text-xs font-semibold uppercase tracking-wider mb-4">
+            Accountability Partner
+          </p>
+          {partnership && partnerProfile ? (
+            <div className="bg-surface border border-border rounded-2xl p-5">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-white text-sm font-semibold">
+                  {partnerProfile.username ? `@${partnerProfile.username}` : partnerProfile.email}
+                </span>
+                {partnership.partner_streak > 0 && (
+                  <span className="text-text-secondary text-xs">🔥 {partnership.partner_streak} day streak</span>
+                )}
+              </div>
+              <p className="text-text-secondary text-xs mb-4">{partnerProfile.email}</p>
+              <button
+                onClick={() => setShowRemoveModal(true)}
+                className="w-full py-3 rounded-2xl border border-red-500/40 text-red-400 font-semibold text-sm transition-transform active:scale-[0.98]"
+              >
+                Remove Partner
+              </button>
+            </div>
+          ) : (
+            <div className="bg-surface border border-border rounded-2xl p-5 text-center">
+              <p className="text-text-secondary text-sm">No partner connected</p>
+            </div>
+          )}
+        </div>
+
         {/* Streak Freeze */}
         <div className="mt-8">
           <p className="text-text-secondary text-xs font-semibold uppercase tracking-wider mb-4">
@@ -343,6 +396,17 @@ export default function Settings() {
       </div>
 
       <BottomNav />
+
+      {showRemoveModal && partnership && (
+        <RemovePartnerModal
+          partnershipId={partnership.id}
+          onClose={() => setShowRemoveModal(false)}
+          onRemoved={() => {
+            setPartnership(null);
+            setPartnerProfile(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -3,14 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { ALL_HABITS, HABIT_EMOJIS } from '../lib/constants';
+import { isUsernameAvailable, setUsername, acceptInviteCode, getStoredInviteCode, clearStoredInviteCode } from '../lib/partners';
 
 export default function Onboarding() {
+  const [step, setStep] = useState(1);
   const [selectedHabits, setSelectedHabits] = useState([]);
   const [customHabits, setCustomHabits] = useState([]);
   const [customHabitInput, setCustomHabitInput] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [usernameVal, setUsernameVal] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState(null);
   const { user } = useAuth();
   const navigate = useNavigate();
 
@@ -57,6 +61,35 @@ export default function Onboarding() {
 
       await supabase.from('habits').insert(habitRows);
 
+      setStep(2);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const checkUsername = async (value) => {
+    setUsernameVal(value);
+    setUsernameStatus(null);
+    if (value.trim().length < 3) return;
+    const available = await isUsernameAvailable(value.trim());
+    setUsernameStatus(available ? 'available' : 'taken');
+  };
+
+  const handleConfirmUsername = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const result = await setUsername(user.id, usernameVal.trim());
+      if (result.error) throw new Error(result.error);
+
+      const inviteCode = getStoredInviteCode();
+      if (inviteCode) {
+        await acceptInviteCode(inviteCode);
+        clearStoredInviteCode();
+      }
+
       navigate('/dashboard', { replace: true });
     } catch (err) {
       setError(err.message);
@@ -64,6 +97,53 @@ export default function Onboarding() {
       setLoading(false);
     }
   };
+
+  if (step === 2) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-6">
+        <div className="max-w-sm w-full">
+          <h1 className="text-2xl font-bold text-white text-center">Choose a username</h1>
+          <p className="mt-2 text-text-secondary text-sm text-center">
+            This is how your partner will find you.
+          </p>
+          {error && <p className="mt-4 text-red-400 text-sm text-center">{error}</p>}
+          <div className="mt-8">
+            <input
+              type="text"
+              placeholder="username"
+              value={usernameVal}
+              onChange={(e) => checkUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              maxLength={20}
+              className="w-full bg-surface border border-border rounded-2xl px-4 py-4 text-white text-base placeholder-text-secondary focus:outline-none focus:border-accent transition-colors"
+            />
+            {usernameStatus === 'available' && (
+              <p className="mt-2 text-accent text-sm">@{usernameVal} is available ✓</p>
+            )}
+            {usernameStatus === 'taken' && (
+              <p className="mt-2 text-red-400 text-sm">@{usernameVal} is taken</p>
+            )}
+          </div>
+          <button
+            onClick={handleConfirmUsername}
+            disabled={usernameStatus !== 'available' || loading}
+            className={`w-full mt-6 py-4 rounded-2xl font-semibold text-base transition-all ${
+              usernameStatus === 'available'
+                ? 'bg-accent text-white active:scale-[0.98]'
+                : 'bg-border text-nav-inactive cursor-not-allowed'
+            }`}
+          >
+            {loading ? 'Saving…' : 'Continue'}
+          </button>
+          <button
+            onClick={() => navigate('/dashboard', { replace: true })}
+            className="w-full mt-3 py-3 text-text-secondary text-sm font-medium transition-colors active:text-white"
+          >
+            Skip for now
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-bg flex flex-col px-6 py-12">
