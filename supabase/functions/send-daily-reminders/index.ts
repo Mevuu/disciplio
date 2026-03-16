@@ -10,6 +10,21 @@ const VAPID_EMAIL = Deno.env.get('VAPID_EMAIL') || 'mailto:hello@disciplio.app';
 
 webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
+const ALLOWED_ORIGINS = [
+  'https://disciplio.app',
+  'https://www.disciplio.app',
+];
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? '';
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+
 const MESSAGES_1PM = [
   'The day is still yours 💪 Check in your habits and keep the streak alive',
   'Hey — halfway through the day. How are your habits going? 🔥',
@@ -46,6 +61,12 @@ async function sendPush(
 }
 
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders(req) });
+  }
+
+  const headers = { ...corsHeaders(req), 'Content-Type': 'application/json' };
+
   try {
     const url = new URL(req.url);
     const checkpointParam = url.searchParams.get('checkpoint');
@@ -60,7 +81,7 @@ serve(async (req) => {
       .eq('notifications_enabled', true);
 
     if (subsErr || !subs) {
-      return new Response(JSON.stringify({ error: subsErr?.message }), { status: 500 });
+      return new Response(JSON.stringify({ error: subsErr?.message }), { status: 500, headers });
     }
 
     let sent = 0;
@@ -127,10 +148,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true, reminders_sent: sent, partner_nudges: partnerNudges }),
-      { headers: { 'Content-Type': 'application/json' } },
+      { headers },
     );
   } catch (err) {
     console.error('Edge function error:', err);
-    return new Response(JSON.stringify({ error: (err as Error).message }), { status: 500 });
+    return new Response(
+      JSON.stringify({ error: (err as Error).message }),
+      { status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } },
+    );
   }
 });

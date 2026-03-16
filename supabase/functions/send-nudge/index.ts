@@ -12,12 +12,32 @@ webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 
+const ALLOWED_ORIGINS = [
+  'https://disciplio.app',
+  'https://www.disciplio.app',
+];
+
+function corsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('Origin') ?? '';
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+
 serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders(req) });
+  }
+
+  const headers = { ...corsHeaders(req), 'Content-Type': 'application/json' };
+
   try {
-    // Auth: extract the user from the Authorization header
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing auth token' }), { status: 401 });
+      return new Response(JSON.stringify({ error: 'Missing auth token' }), { status: 401, headers });
     }
 
     const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -25,17 +45,16 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
     const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(token);
     if (authErr || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401 });
+      return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers });
     }
 
     const { partnership_id } = await req.json();
     if (!partnership_id) {
-      return new Response(JSON.stringify({ error: 'partnership_id required' }), { status: 400 });
+      return new Response(JSON.stringify({ error: 'partnership_id required' }), { status: 400, headers });
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Fetch partnership
     const { data: partnership, error: pErr } = await supabase
       .from('partnerships')
       .select('*')
@@ -43,31 +62,27 @@ serve(async (req) => {
       .single();
 
     if (pErr || !partnership) {
-      return new Response(JSON.stringify({ error: 'Partnership not found' }), { status: 404 });
+      return new Response(JSON.stringify({ error: 'Partnership not found' }), { status: 404, headers });
     }
 
-    // Verify the caller is part of this partnership
     if (partnership.user1_id !== user.id && partnership.user2_id !== user.id) {
-      return new Response(JSON.stringify({ error: 'Not your partnership' }), { status: 403 });
+      return new Response(JSON.stringify({ error: 'Not your partnership' }), { status: 403, headers });
     }
 
-    // Cooldown check
     if (partnership.last_nudge_sent) {
       const elapsed = Date.now() - new Date(partnership.last_nudge_sent).getTime();
       if (elapsed < COOLDOWN_MS) {
         const remainMs = COOLDOWN_MS - elapsed;
         return new Response(
           JSON.stringify({ error: 'Cooldown active', remaining_ms: remainMs }),
-          { status: 429 },
+          { status: 429, headers },
         );
       }
     }
 
-    // Find the partner
     const partnerId =
       partnership.user1_id === user.id ? partnership.user2_id : partnership.user1_id;
 
-    // Check if partner has push enabled
     const { data: partnerSub } = await supabase
       .from('push_subscriptions')
       .select('subscription, notifications_enabled')
@@ -77,11 +92,10 @@ serve(async (req) => {
     if (!partnerSub || !partnerSub.notifications_enabled) {
       return new Response(
         JSON.stringify({ error: 'Partner has notifications disabled' }),
-        { status: 422 },
+        { status: 422, headers },
       );
     }
 
-    // Send the push notification
     const payload = JSON.stringify({
       title: 'Disciplio',
       body: 'Your partner is checking in on you 👋 Time to crush those habits!',
@@ -94,7 +108,6 @@ serve(async (req) => {
       payload,
     );
 
-    // Update last_nudge_sent
     await supabase
       .from('partnerships')
       .update({ last_nudge_sent: new Date().toISOString() })
@@ -102,10 +115,13 @@ serve(async (req) => {
 
     return new Response(
       JSON.stringify({ ok: true, nudged: partnerId }),
-      { headers: { 'Content-Type': 'application/json' } },
+      { headers },
     );
   } catch (err) {
     console.error('send-nudge error:', err);
-    return new Response(JSON.stringify({ error: (err as Error).message }), { status: 500 });
+    return new Response(
+      JSON.stringify({ error: (err as Error).message }),
+      { status: 500, headers: { ...corsHeaders(req), 'Content-Type': 'application/json' } },
+    );
   }
 });
