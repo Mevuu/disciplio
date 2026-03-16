@@ -27,7 +27,12 @@ export default function NotificationModal() {
 
   const handleEnable = async () => {
     setSubscribing(true);
-    await subscribeToPush(user.id);
+    const ok = await subscribeToPush(user.id);
+    if (!ok) {
+      console.warn('[NotificationModal] subscribeToPush returned false — keeping modal open');
+      setSubscribing(false);
+      return;
+    }
     setVisible(false);
   };
 

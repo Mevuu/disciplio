@@ -16,14 +16,32 @@ function urlBase64ToUint8Array(base64String) {
 }
 
 export function shouldShowNotificationModal() {
-  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return false;
-  if (!VAPID_PUBLIC_KEY) return false;
-  if (Notification.permission === 'granted') return false;
-  if (Notification.permission === 'denied') return false;
-  if (localStorage.getItem(MODAL_DISMISSED_KEY) === 'permanent') return false;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    console.log('[push] Browser does not support SW or PushManager');
+    return false;
+  }
+  if (!VAPID_PUBLIC_KEY) {
+    console.log('[push] VITE_VAPID_PUBLIC_KEY is missing from env');
+    return false;
+  }
+  if (Notification.permission === 'granted') {
+    console.log('[push] Permission already granted — modal not needed');
+    return false;
+  }
+  if (Notification.permission === 'denied') {
+    console.log('[push] Permission denied by user');
+    return false;
+  }
+  if (localStorage.getItem(MODAL_DISMISSED_KEY) === 'permanent') {
+    console.log('[push] Modal was permanently dismissed');
+    return false;
+  }
 
   const snoozeUntil = localStorage.getItem(MODAL_SNOOZE_KEY);
-  if (snoozeUntil && Date.now() < parseInt(snoozeUntil, 10)) return false;
+  if (snoozeUntil && Date.now() < parseInt(snoozeUntil, 10)) {
+    console.log('[push] Modal snoozed until', new Date(parseInt(snoozeUntil, 10)).toISOString());
+    return false;
+  }
 
   return true;
 }
@@ -43,28 +61,63 @@ export function resetNotificationPreference() {
 }
 
 export async function subscribeToPush(userId) {
+  console.log('[push] subscribeToPush called for user:', userId);
+  console.log('[push] VAPID_PUBLIC_KEY present:', !!VAPID_PUBLIC_KEY, '| length:', VAPID_PUBLIC_KEY?.length);
+
+  if (!VAPID_PUBLIC_KEY) {
+    console.error('[push] ABORT — no VAPID public key');
+    return false;
+  }
+
   try {
+    // Step 1: Wait for the service worker to be ready
+    console.log('[push] Waiting for service worker ready…');
     const registration = await navigator.serviceWorker.ready;
+    console.log('[push] Service worker ready — scope:', registration.scope);
+
+    // Step 2: Request browser permission explicitly (needed for some browsers)
+    const permission = await Notification.requestPermission();
+    console.log('[push] Notification.requestPermission() result:', permission);
+    if (permission !== 'granted') {
+      console.warn('[push] Permission not granted — aborting');
+      return false;
+    }
+
+    // Step 3: Subscribe to push via the PushManager
+    console.log('[push] Calling pushManager.subscribe…');
     const subscription = await registration.pushManager.subscribe({
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
+    const subJson = subscription.toJSON();
+    console.log('[push] PushSubscription obtained:', JSON.stringify(subJson, null, 2));
 
-    const { error } = await supabase.from('push_subscriptions').upsert(
+    if (!subJson || !subJson.endpoint) {
+      console.error('[push] Subscription object is empty or missing endpoint');
+      return false;
+    }
+
+    // Step 4: Save to Supabase
+    console.log('[push] Saving to push_subscriptions for user_id:', userId);
+    const { data, error } = await supabase.from('push_subscriptions').upsert(
       {
         user_id: userId,
-        subscription: subscription.toJSON(),
+        subscription: subJson,
         notifications_enabled: true,
       },
       { onConflict: 'user_id' }
-    );
+    ).select();
 
-    if (error) console.error('Failed to save push subscription:', error);
+    if (error) {
+      console.error('[push] Supabase upsert FAILED:', error.message, error.details, error.hint);
+      return false;
+    }
 
+    console.log('[push] Supabase upsert SUCCESS:', data);
     dismissModalPermanently();
     return true;
   } catch (err) {
-    console.error('Push subscription failed:', err);
+    console.error('[push] subscribeToPush EXCEPTION:', err);
     return false;
   }
 }
@@ -74,13 +127,25 @@ export async function repairMissingSubscription(userId) {
   if (!VAPID_PUBLIC_KEY) return;
   if (Notification.permission !== 'granted') return;
 
-  const { data } = await supabase
+  console.log('[push-repair] Checking for existing row for user:', userId);
+
+  const { data, error: selectErr } = await supabase
     .from('push_subscriptions')
     .select('id')
     .eq('user_id', userId)
     .maybeSingle();
 
-  if (data) return;
+  if (selectErr) {
+    console.error('[push-repair] Select error:', selectErr.message);
+    return;
+  }
+
+  if (data) {
+    console.log('[push-repair] Row already exists — no repair needed');
+    return;
+  }
+
+  console.log('[push-repair] No row found — re-registering subscription');
 
   try {
     const registration = await navigator.serviceWorker.ready;
@@ -88,23 +153,25 @@ export async function repairMissingSubscription(userId) {
       userVisibleOnly: true,
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
+    const subJson = subscription.toJSON();
+    console.log('[push-repair] PushSubscription:', JSON.stringify(subJson, null, 2));
 
-    const { error } = await supabase.from('push_subscriptions').upsert(
+    const { data: saved, error } = await supabase.from('push_subscriptions').upsert(
       {
         user_id: userId,
-        subscription: subscription.toJSON(),
+        subscription: subJson,
         notifications_enabled: true,
       },
       { onConflict: 'user_id' }
-    );
+    ).select();
 
     if (error) {
-      console.error('Repair: failed to save subscription:', error);
+      console.error('[push-repair] Supabase upsert FAILED:', error.message, error.details, error.hint);
     } else {
-      console.log('Repair: re-registered push subscription for user', userId);
+      console.log('[push-repair] Supabase upsert SUCCESS:', saved);
     }
   } catch (err) {
-    console.error('Repair: push re-subscribe failed:', err);
+    console.error('[push-repair] EXCEPTION:', err);
   }
 }
 
