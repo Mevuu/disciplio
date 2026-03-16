@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!;
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!;
@@ -35,17 +36,16 @@ serve(async (req) => {
   const headers = { ...corsHeaders(req), 'Content-Type': 'application/json' };
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Missing auth token' }), { status: 401, headers });
-    }
+    // Auth: create a client using the caller's token so getUser() validates it
+    const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      global: {
+        headers: { Authorization: req.headers.get('Authorization') ?? '' },
+      },
+    });
 
-    const supabaseAuth = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authErr } = await supabaseAuth.auth.getUser(token);
+    const { data: { user }, error: authErr } = await supabaseClient.auth.getUser();
     if (authErr || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), { status: 401, headers });
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers });
     }
 
     const { partnership_id } = await req.json();
@@ -53,6 +53,7 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: 'partnership_id required' }), { status: 400, headers });
     }
 
+    // Service-role client for DB operations that bypass RLS
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     const { data: partnership, error: pErr } = await supabase
