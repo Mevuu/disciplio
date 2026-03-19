@@ -145,7 +145,7 @@ export default function Dashboard() {
       const newStreak = Math.max(0, (profile?.streak_count ?? 1) - 1);
       const { data: updated } = await supabase
         .from('profiles')
-        .upsert({ ...profile, streak_count: newStreak, last_checkin_date: null })
+        .upsert({ ...profile, streak_count: newStreak })
         .select()
         .single();
       if (updated) setProfile(updated);
