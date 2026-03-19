@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import HabitCard from '../components/HabitCard';
@@ -31,6 +31,7 @@ export default function Dashboard() {
   const [partnership, setPartnership] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const baseProfileRef = useRef(null);
 
   const now = new Date();
   const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
@@ -94,6 +95,25 @@ export default function Dashboard() {
     if (profileData) {
       const validated = await validateStreakOnLoad(profileData, todayStr());
       if (validated !== profileData) setProfile(validated);
+      const settled = validated ?? profileData;
+      if (settled.last_checkin_date !== today) {
+        baseProfileRef.current = { ...settled };
+      } else {
+        const { data: prevCheckin } = await supabase
+          .from('checkins')
+          .select('date')
+          .eq('user_id', user.id)
+          .eq('fully_completed', true)
+          .lt('date', today)
+          .order('date', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        baseProfileRef.current = {
+          ...settled,
+          streak_count: Math.max(0, (settled.streak_count ?? 1) - 1),
+          last_checkin_date: prevCheckin?.date ?? null,
+        };
+      }
     }
 
     await fetchPartnership();
@@ -158,6 +178,20 @@ export default function Dashboard() {
           setPartnership((prev) => prev ? { ...prev, partner_streak: newStreak } : prev);
         }
       }
+    } else if (profile?.last_checkin_date === today && baseProfileRef.current) {
+      const base = baseProfileRef.current;
+      const { data: reverted } = await supabase
+        .from('profiles')
+        .upsert({
+          ...profile,
+          streak_count: base.streak_count,
+          last_checkin_date: base.last_checkin_date,
+          streak_freeze_count: base.streak_freeze_count,
+        })
+        .select()
+        .single();
+      if (reverted) setProfile(reverted);
+      setCompletedDays((prev) => prev.filter((d) => d !== now.getDate()));
     }
   };
 
@@ -169,6 +203,8 @@ export default function Dashboard() {
       .maybeSingle();
 
     if (fetchErr) return null;
+
+    baseProfileRef.current = { ...freshProfile };
 
     const lastDate = freshProfile?.last_checkin_date ?? null;
     const currentStreak = freshProfile?.streak_count ?? 0;
