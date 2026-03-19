@@ -1,5 +1,5 @@
-[project]
-id = "beokrnxxxhihxflealqk"
-
 [functions.send-nudge]
+verify_jwt = false
+
+[functions.send-daily-reminders]
 verify_jwt = false
