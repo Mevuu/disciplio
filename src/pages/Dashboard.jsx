@@ -140,17 +140,6 @@ export default function Dashboard() {
       },
       { onConflict: 'user_id,date' }
     );
-
-    if (!fullyCompleted && profile?.last_checkin_date === today) {
-      const newStreak = Math.max(0, (profile?.streak_count ?? 1) - 1);
-      const { data: updated } = await supabase
-        .from('profiles')
-        .upsert({ ...profile, streak_count: newStreak })
-        .select()
-        .single();
-      if (updated) setProfile(updated);
-    }
-
     if (fullyCompleted) {
       if (!completedDays.includes(now.getDate())) {
         setCompletedDays((prev) => [...prev, now.getDate()]);
