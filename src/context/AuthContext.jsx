@@ -25,6 +25,23 @@ export function AuthProvider({ children }) {
         }
 
         setUser(verified);
+
+        // Save the user's local timezone if not already set
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        if (tz) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('timezone')
+            .eq('id', verified.id)
+            .maybeSingle();
+
+          if (!profile?.timezone || profile.timezone === 'UTC') {
+            await supabase
+              .from('profiles')
+              .update({ timezone: tz })
+              .eq('id', verified.id);
+          }
+        }
       } else {
         setUser(null);
       }

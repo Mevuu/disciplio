@@ -41,9 +41,32 @@ function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function getLocalHour(timezone: string): number {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      hour: 'numeric',
+      hour12: false,
+    }).formatToParts(new Date());
+    const hourPart = parts.find((p) => p.type === 'hour');
+    return parseInt(hourPart?.value ?? '-1', 10);
+  } catch {
+    return -1;
+  }
+}
+
+function getLocalDateStr(timezone: string): string {
+  try {
+    const d = new Date();
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).formatToParts(d);
+    const y = parts.find((p) => p.type === 'year')?.value;
+    const m = parts.find((p) => p.type === 'month')?.value;
+    const day = parts.find((p) => p.type === 'day')?.value;
+    return `${y}-${m}-${day}`;
+  } catch {
+    const d = new Date();
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  }
 }
 
 async function sendPush(
@@ -68,13 +91,9 @@ serve(async (req) => {
   const headers = { ...corsHeaders(req), 'Content-Type': 'application/json' };
 
   try {
-    const url = new URL(req.url);
-    const checkpointParam = url.searchParams.get('checkpoint');
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const today = todayStr();
 
-    // Fetch all users with push enabled
+    // Fetch all users with push enabled, joined with their timezone
     const { data: subs, error: subsErr } = await supabase
       .from('push_subscriptions')
       .select('user_id, subscription')
@@ -84,12 +103,36 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: subsErr?.message }), { status: 500, headers });
     }
 
+    // Batch-fetch timezones for all subscribed users
+    const userIds = subs.map((s) => s.user_id);
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, timezone')
+      .in('id', userIds);
+
+    const tzMap: Record<string, string> = {};
+    for (const p of profiles ?? []) {
+      tzMap[p.id] = p.timezone || 'UTC';
+    }
+
     let sent = 0;
     let partnerNudges = 0;
+    let skipped = 0;
 
     for (const sub of subs) {
       const userId = sub.user_id;
       const subscription = sub.subscription as webpush.PushSubscription;
+      const tz = tzMap[userId] || 'UTC';
+      const localHour = getLocalHour(tz);
+
+      // Only process users whose local hour is 13 (1PM) or 20 (8PM)
+      if (localHour !== 13 && localHour !== 20) {
+        skipped++;
+        continue;
+      }
+
+      const is8pm = localHour === 20;
+      const today = getLocalDateStr(tz);
 
       // Check if user has fully completed today
       const { data: checkin } = await supabase
@@ -103,7 +146,7 @@ serve(async (req) => {
 
       // Habit reminder: only if NOT fully completed
       if (!userDone) {
-        const messages = checkpointParam === '8pm' ? MESSAGES_8PM : MESSAGES_1PM;
+        const messages = is8pm ? MESSAGES_8PM : MESSAGES_1PM;
         const ok = await sendPush(subscription, {
           title: 'Disciplio',
           body: pick(messages),
@@ -114,7 +157,7 @@ serve(async (req) => {
       }
 
       // Partner nudge prompt (8PM only): user IS done, partner is NOT
-      if (checkpointParam === '8pm' && userDone) {
+      if (is8pm && userDone) {
         const { data: partnership } = await supabase
           .from('partnerships')
           .select('*')
@@ -147,7 +190,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, reminders_sent: sent, partner_nudges: partnerNudges }),
+      JSON.stringify({ ok: true, reminders_sent: sent, partner_nudges: partnerNudges, skipped }),
       { headers },
     );
   } catch (err) {
