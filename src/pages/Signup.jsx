@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
-import { ALL_HABITS, HABIT_EMOJIS } from '../lib/constants';
+import { ALL_HABITS, HABIT_EMOJIS, FREEZE_LIMITS } from '../lib/constants';
 import { isUsernameAvailable, setUsername, acceptInviteCode, getStoredInviteCode, clearStoredInviteCode } from '../lib/partners';
 
 export default function Signup() {
@@ -63,11 +63,13 @@ export default function Signup() {
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
+        const month = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
         await supabase.from('profiles').upsert({
           id: user.id,
           email: user.email,
           streak_count: 0,
-          streak_freeze_count: 2,
+          streak_freeze_count: FREEZE_LIMITS.free,
+          freeze_reset_month: month,
           subscription_status: 'free',
           habit_slots_unlocked: 3,
         });

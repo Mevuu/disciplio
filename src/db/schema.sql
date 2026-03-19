@@ -8,7 +8,8 @@ create table if not exists public.profiles (
   created_at timestamptz default now(),
   streak_count integer default 0,
   last_checkin_date date,
-  streak_freeze_count integer default 2,
+  streak_freeze_count integer default 1,
+  freeze_reset_month text,
   subscription_status text default 'free',
   partner_id uuid references public.profiles(id),
   habit_slots_unlocked integer default 3
@@ -55,6 +56,7 @@ create table if not exists public.checkins (
   date date not null,
   habits_completed uuid[] default '{}',
   fully_completed boolean default false,
+  used_freeze boolean default false,
   unique(user_id, date)
 );
 

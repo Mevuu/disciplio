@@ -8,7 +8,7 @@ import NotificationModal from '../components/NotificationModal';
 import PartnerCard from '../components/PartnerCard';
 import PendingInviteBanner from '../components/PendingInviteBanner';
 import InvitePartnerModal from '../components/InvitePartnerModal';
-import { MONTH_NAMES } from '../lib/constants';
+import { MONTH_NAMES, FREEZE_LIMITS } from '../lib/constants';
 import {
   getStoredInviteCode,
   clearStoredInviteCode,
@@ -16,9 +16,12 @@ import {
   maybeIncrementPartnerStreak,
 } from '../lib/partners';
 
-function todayStr() {
-  const d = new Date();
+function formatDate(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function todayStr() {
+  return formatDate(new Date());
 }
 
 export default function Dashboard() {
@@ -68,19 +71,41 @@ export default function Dashboard() {
 
     let profileData = profileRes.data;
     if (!profileData && !profileRes.error) {
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
       const { data: created } = await supabase
         .from('profiles')
         .upsert({
           id: user.id,
           email: user.email,
           streak_count: 0,
-          streak_freeze_count: 2,
+          streak_freeze_count: FREEZE_LIMITS.free,
+          freeze_reset_month: currentMonth,
           subscription_status: 'free',
           habit_slots_unlocked: 3,
         })
         .select()
         .single();
       profileData = created;
+    }
+
+    if (profileData) {
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      if (profileData.freeze_reset_month !== currentMonth) {
+        const freezeLimit = profileData.subscription_status === 'paid'
+          ? FREEZE_LIMITS.paid
+          : FREEZE_LIMITS.free;
+        const { data: resetProfile } = await supabase
+          .from('profiles')
+          .upsert({
+            id: user.id,
+            email: user.email,
+            streak_freeze_count: freezeLimit,
+            freeze_reset_month: currentMonth,
+          })
+          .select()
+          .single();
+        if (resetProfile) profileData = resetProfile;
+      }
     }
 
     if (profileData) setProfile(profileData);
@@ -208,7 +233,7 @@ export default function Dashboard() {
 
     const lastDate = freshProfile?.last_checkin_date ?? null;
     const currentStreak = freshProfile?.streak_count ?? 0;
-    const currentFreezes = freshProfile?.streak_freeze_count ?? 2;
+    const currentFreezes = freshProfile?.streak_freeze_count ?? 0;
     let newStreak;
     let freezesUsed = 0;
 
@@ -230,6 +255,21 @@ export default function Dashboard() {
           newStreak = 1;
         }
       }
+    }
+
+    if (freezesUsed > 0) {
+      const lastD = new Date(lastDate + 'T00:00:00');
+      const freezeRecords = [];
+      for (let i = 1; i <= freezesUsed; i++) {
+        const d = new Date(lastD);
+        d.setDate(d.getDate() + i);
+        freezeRecords.push({
+          user_id: user.id,
+          date: formatDate(d),
+          used_freeze: true,
+        });
+      }
+      await supabase.from('checkins').upsert(freezeRecords, { onConflict: 'user_id,date' });
     }
 
     const profileData = {
@@ -267,7 +307,41 @@ export default function Dashboard() {
 
     const missedDays = diffDays - 1;
     const availableFreezes = currentProfile?.streak_freeze_count ?? 0;
-    if (missedDays <= availableFreezes) return currentProfile;
+
+    if (missedDays <= availableFreezes && availableFreezes > 0) {
+      const newFreezeCount = availableFreezes - missedDays;
+      const yesterday = new Date(todayDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const newLastCheckin = formatDate(yesterday);
+
+      const freezeRecords = [];
+      for (let i = 1; i <= missedDays; i++) {
+        const d = new Date(last);
+        d.setDate(d.getDate() + i);
+        freezeRecords.push({
+          user_id: user.id,
+          date: formatDate(d),
+          used_freeze: true,
+        });
+      }
+      if (freezeRecords.length > 0) {
+        await supabase.from('checkins').upsert(freezeRecords, { onConflict: 'user_id,date' });
+      }
+
+      const { data: saved, error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          streak_freeze_count: newFreezeCount,
+          last_checkin_date: newLastCheckin,
+        })
+        .select()
+        .single();
+
+      if (error) return { ...currentProfile, streak_freeze_count: newFreezeCount, last_checkin_date: newLastCheckin };
+      return saved;
+    }
 
     const { data: saved, error } = await supabase
       .from('profiles')

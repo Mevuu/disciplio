@@ -22,3 +22,5 @@ export const MONTH_NAMES = [
 ];
 
 export const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+export const FREEZE_LIMITS = { free: 1, paid: 3 };
