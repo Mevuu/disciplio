@@ -36,6 +36,20 @@ serve(async (req) => {
   const headers = { ...corsHeaders(req), 'Content-Type': 'application/json' };
 
   try {
+    const rawBody = await req.text();
+    console.log('[send-nudge] raw body:', rawBody);
+
+    let body: Record<string, unknown>;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      console.log('[send-nudge] failed to parse JSON body');
+      return new Response(JSON.stringify({ error: 'Invalid JSON body' }), { status: 400, headers });
+    }
+
+    const partnership_id = body.partnership_id as string | undefined;
+    console.log('[send-nudge] parsed partnership_id:', partnership_id, '| type:', typeof partnership_id);
+
     // Auth: create a client using the caller's token so getUser() validates it
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: {
@@ -44,12 +58,13 @@ serve(async (req) => {
     });
 
     const { data: { user }, error: authErr } = await supabaseClient.auth.getUser();
+    console.log('[send-nudge] auth user:', user?.id, '| authErr:', authErr?.message);
     if (authErr || !user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers });
     }
 
-    const { partnership_id } = await req.json();
     if (!partnership_id) {
+      console.log('[send-nudge] missing partnership_id, returning 400');
       return new Response(JSON.stringify({ error: 'partnership_id required' }), { status: 400, headers });
     }
 
@@ -62,11 +77,14 @@ serve(async (req) => {
       .eq('id', partnership_id)
       .single();
 
+    console.log('[send-nudge] partnership lookup:', partnership?.id, '| error:', pErr?.message);
+
     if (pErr || !partnership) {
       return new Response(JSON.stringify({ error: 'Partnership not found' }), { status: 404, headers });
     }
 
     if (partnership.user1_id !== user.id && partnership.user2_id !== user.id) {
+      console.log('[send-nudge] ownership check failed: user', user.id, 'not in', partnership.user1_id, partnership.user2_id);
       return new Response(JSON.stringify({ error: 'Not your partnership' }), { status: 403, headers });
     }
 
@@ -90,10 +108,12 @@ serve(async (req) => {
       .eq('user_id', partnerId)
       .maybeSingle();
 
+    console.log('[send-nudge] partnerSub for', partnerId, ':', partnerSub ? `enabled=${partnerSub.notifications_enabled}` : 'NO RECORD');
+
     if (!partnerSub || !partnerSub.notifications_enabled) {
       return new Response(
-        JSON.stringify({ error: 'Partner has notifications disabled' }),
-        { status: 422, headers },
+        JSON.stringify({ ok: false, reason: 'partner_notifications_disabled' }),
+        { headers },
       );
     }
 

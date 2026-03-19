@@ -7,6 +7,7 @@ export default function NudgeButton({ partnershipId, lastNudgeSent }) {
   const [cooldownEnd, setCooldownEnd] = useState(null);
   const [remaining, setRemaining] = useState('');
   const [sending, setSending] = useState(false);
+  const [statusMsg, setStatusMsg] = useState('');
   const intervalRef = useRef(null);
 
   useEffect(() => {
@@ -43,15 +44,21 @@ export default function NudgeButton({ partnershipId, lastNudgeSent }) {
 
   const handleNudge = async () => {
     setSending(true);
+    setStatusMsg('');
     try {
       const { data, error } = await supabase.functions.invoke('send-nudge', {
         body: { partnership_id: partnershipId },
       });
       console.log('[nudge] response:', data, '| error:', error);
       if (error) throw error;
+      if (data?.ok === false && data.reason === 'partner_notifications_disabled') {
+        setStatusMsg('Your partner hasn\'t enabled notifications yet');
+        return;
+      }
       setCooldownEnd(Date.now() + COOLDOWN_MS);
     } catch (err) {
       console.error('Nudge failed:', err);
+      setStatusMsg('Failed to send nudge');
     } finally {
       setSending(false);
     }
@@ -60,16 +67,21 @@ export default function NudgeButton({ partnershipId, lastNudgeSent }) {
   const disabled = !!cooldownEnd || sending;
 
   return (
-    <button
-      onClick={handleNudge}
-      disabled={disabled}
-      className={`w-full py-3 rounded-2xl font-semibold text-sm transition-all ${
-        disabled
-          ? 'border border-border text-nav-inactive cursor-not-allowed'
-          : 'border border-accent text-accent active:scale-[0.98]'
-      }`}
-    >
-      {sending ? 'Sending…' : remaining || 'Nudge Partner 👋'}
-    </button>
+    <div>
+      <button
+        onClick={handleNudge}
+        disabled={disabled}
+        className={`w-full py-3 rounded-2xl font-semibold text-sm transition-all ${
+          disabled
+            ? 'border border-border text-nav-inactive cursor-not-allowed'
+            : 'border border-accent text-accent active:scale-[0.98]'
+        }`}
+      >
+        {sending ? 'Sending…' : remaining || 'Nudge Partner 👋'}
+      </button>
+      {statusMsg && (
+        <p className="mt-2 text-text-secondary text-xs text-center">{statusMsg}</p>
+      )}
+    </div>
   );
 }

@@ -1,0 +1,5 @@
+[project]
+id = "beokrnxxxhihxflealqk"
+
+[functions.send-nudge]
+verify_jwt = false
