@@ -1,4 +1,5 @@
-import Legal, { legalStyles as s } from './Legal';
+import Legal from './Legal';
+import { legalStyles as s } from './legalStyles';
 
 export default function Terms() {
   return (
