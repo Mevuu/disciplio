@@ -10,6 +10,8 @@ import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
 import Friends from './pages/Friends';
 import InviteLanding from './pages/InviteLanding';
+import Privacy from './pages/Privacy';
+import Terms from './pages/Terms';
 
 export default function App() {
   return (
@@ -17,6 +19,8 @@ export default function App() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+          <Route path="/privacy" element={<Privacy />} />
+          <Route path="/terms" element={<Terms />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
           <Route path="/invite/:code" element={<InviteLanding />} />
