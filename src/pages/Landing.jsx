@@ -2,6 +2,11 @@
 // Static markup kept as one string so the design stays exactly as designed.
 
 const CSS = `
+/* The old PWA set overflow-x:hidden on html, body and #root, which turns each
+   of them into a scroll container and can trap page scrolling. The marketing
+   page is a normal document, so undo that here. */
+html,body,#root{overflow:visible!important;height:auto!important;max-height:none!important;position:static!important}
+html{overflow-y:auto!important}
 body{margin:0;background:#0a120e;font-family:"Helvetica Neue",Helvetica,Arial,sans-serif}
 a{color:#6ee7b7;text-decoration:none}
 a:hover{color:#a7f3d0}

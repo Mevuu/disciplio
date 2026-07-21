@@ -18,7 +18,8 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+          {/* Marketing page: always shown, even to signed-in PWA users. */}
+          <Route path="/" element={<Landing />} />
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/signup" element={<Signup />} />
