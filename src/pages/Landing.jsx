@@ -30,6 +30,9 @@ img{max-width:100%}
 }
 `;
 
+const APP_STORE_URL =
+  'https://apps.apple.com/app/disciplio-60-day-life-reset/id6788071315';
+
 const APPLE_LOGO = `<svg viewBox="0 0 384 512" width="20" height="20" fill="currentColor" style="flex:none"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg>`;
 
 const HTML = `
@@ -38,7 +41,7 @@ const HTML = `
     <div style="font-size:18px;font-weight:800;letter-spacing:-.5px">Disciplio<span style="color:#6ee7b7">.</span></div>
     <div style="display:flex;gap:28px;align-items:center;font-size:13px;color:rgba(255,255,255,.6)">
       <a class="navhide navlink" href="#program">The Reset</a><a class="navhide navlink" href="#stats">Stats</a><a class="navhide navlink" href="#partners">Partners</a>
-      <span style="background:#6ee7b7;color:#04150d;font-weight:700;padding:8px 18px;border-radius:20px;font-size:13px">Get the app</span>
+      <a href="${APP_STORE_URL}" style="background:#6ee7b7;color:#04150d;font-weight:700;padding:8px 18px;border-radius:20px;font-size:13px">Get the app</a>
     </div>
   </div>
   <div class="hero" style="display:flex;align-items:center;gap:60px;padding:40px 56px 80px;position:relative;overflow:hidden">
@@ -48,7 +51,7 @@ const HTML = `
       <div class="h1" style="font-size:58px;font-weight:800;line-height:1.02;letter-spacing:-2px;color:#f2f5f3;text-wrap:balance">Done drifting? Reset your life in 60 days.</div>
       <div style="font-size:17px;line-height:1.55;color:rgba(255,255,255,.6);max-width:420px;text-wrap:pretty">One short lesson and one action every day, on top of the commitments you choose. Do them and your life stats climb. Miss a day and your streak is on the line.</div>
       <div style="display:flex;gap:14px;align-items:center;margin-top:8px">
-        <div style="display:flex;align-items:center;gap:10px;background:#f2f5f3;color:#0a120e;padding:12px 22px;border-radius:12px">${APPLE_LOGO}<span style="display:flex;flex-direction:column;line-height:1.1"><span style="font-size:9px;font-weight:600">Download on the</span><span style="font-size:16px;font-weight:700">App Store</span></span></div>
+        <a href="${APP_STORE_URL}" style="display:flex;align-items:center;gap:10px;background:#f2f5f3;color:#0a120e;padding:12px 22px;border-radius:12px">${APPLE_LOGO}<span style="display:flex;flex-direction:column;line-height:1.1"><span style="font-size:9px;font-weight:600">Download on the</span><span style="font-size:16px;font-weight:700">App Store</span></span></a>
         <div style="font-size:13px;color:rgba(255,255,255,.5)">7 day free trial</div>
       </div>
     </div>
@@ -105,7 +108,7 @@ const HTML = `
   <div class="cta" style="padding:80px 56px 90px;text-align:center;display:flex;flex-direction:column;gap:18px;align-items:center;background:radial-gradient(60% 100% at 50% 100%,rgba(110,231,183,.1),transparent 70%)">
     <div class="ctah" style="font-size:42px;font-weight:800;letter-spacing:-1.5px;max-width:560px;line-height:1.08;text-wrap:balance">Day 1 is the hardest. Start it now.</div>
     <div style="font-size:14px;color:rgba(255,255,255,.5)">7 day free trial, cancel anytime</div>
-    <div style="display:flex;align-items:center;gap:10px;background:#6ee7b7;color:#04150d;padding:13px 26px;border-radius:12px;margin-top:6px">${APPLE_LOGO}<span style="display:flex;flex-direction:column;line-height:1.1;text-align:left"><span style="font-size:9px;font-weight:600">Download on the</span><span style="font-size:16px;font-weight:800">App Store</span></span></div>
+    <a href="${APP_STORE_URL}" style="display:flex;align-items:center;gap:10px;background:#6ee7b7;color:#04150d;padding:13px 26px;border-radius:12px;margin-top:6px">${APPLE_LOGO}<span style="display:flex;flex-direction:column;line-height:1.1;text-align:left"><span style="font-size:9px;font-weight:600">Download on the</span><span style="font-size:16px;font-weight:800">App Store</span></span></a>
     <div style="display:flex;gap:20px;font-size:12px;color:rgba(255,255,255,.35);margin-top:30px"><a href="/terms" style="color:rgba(255,255,255,.45)">Terms</a><a href="/privacy" style="color:rgba(255,255,255,.45)">Privacy</a><a href="mailto:support@disciplio.app" style="color:rgba(255,255,255,.45)">Support</a><span>&copy; 2026 Disciplio</span></div>
   </div>
 </div>
